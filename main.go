@@ -9,12 +9,22 @@ import (
 	"log"
 	"net"
   "time"
+"flag"
 )
 
 // Based off arpscan.go from gopacket examples
+var netInterface string
+var buttonMac string
+var timeout int64
+func init() {
+	flag.StringVar(&netInterface, "interface", "en0", "help message for flagname")
+	flag.StringVar(&buttonMac, "mac", "NOPE", "Mac address for dash button")
+	flag.Int64Var(&timeout, "timeout", 10, "Mac address for dash button")
+}
 
 func main() {
-	iface, err := net.InterfaceByName("en0")
+	flag.Parse()
+	iface, err := net.InterfaceByName(netInterface)
 
 	if err != nil {
 		panic(err)
@@ -75,10 +85,14 @@ func readARP(handle *pcap.Handle, iface *net.Interface, stop chan struct{}) {
 	src := gopacket.NewPacketSource(handle, layers.LayerTypeEthernet)
 	in := src.Packets()
 
-	api, _ := wemo.NewByInterface("en0")
-	devices, _ := api.DiscoverAll(3*time.Second)
+	api, _ := wemo.NewByInterface(netInterface)
+	fmt.Printf("Scanning for WeMo devices")
+	devices, _ := api.DiscoverAll(time.Duration(timeout)*time.Second)
 	for _, device := range devices {
 		fmt.Printf("Found %+v\n", device)
+	}
+	if len(devices) == 0 {
+		fmt.Printf("Didn't find any devices.")
 	}
 
 	for {
@@ -95,8 +109,8 @@ func readARP(handle *pcap.Handle, iface *net.Interface, stop chan struct{}) {
 			arp := arpLayer.(*layers.ARP)
 			if (arp.Operation == layers.ARPRequest) {
 				var macAddr = net.HardwareAddr(arp.SourceHwAddress)
-				if macAddr.String() == "74:c2:46:21:c9:42" {
-					log.Printf("Pushed Bounty!")
+				if macAddr.String() == buttonMac {
+					log.Printf("Pushed button!")
 
 					for _ ,device := range devices {
 						device.Toggle()
