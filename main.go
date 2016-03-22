@@ -95,9 +95,16 @@ func readARP(handle *pcap.Handle, iface *net.Interface, stop chan struct{}) {
 		fmt.Printf("Didn't find any devices.")
 	}
 
+	var waiter = time.After(time.Second*1);
+
+	var pause = false;
 	for {
 		var packet gopacket.Packet
 		select {
+		case <-waiter:
+			log.Printf("Tick!")
+			pause = false;
+			continue
 		case <-stop:
 			return
 		case packet = <-in:
@@ -107,10 +114,18 @@ func readARP(handle *pcap.Handle, iface *net.Interface, stop chan struct{}) {
 				continue
 			}
 			arp := arpLayer.(*layers.ARP)
+			var macAddr = net.HardwareAddr(arp.SourceHwAddress)
+			//log.Printf("Macaddr %s", macAddr)
 			if (arp.Operation == layers.ARPRequest) {
-				var macAddr = net.HardwareAddr(arp.SourceHwAddress)
+
 				if macAddr.String() == buttonMac {
 					log.Printf("Pushed button!")
+					if pause {
+						log.Printf("debounced")
+						continue
+					}
+					pause = true;
+					waiter = time.After(time.Second*3)
 
 					for _ ,device := range devices {
 						device.Toggle()
